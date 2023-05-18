@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="bootstrap-5.2.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="uppy-3.6.1.min.css" rel="stylesheet">
+  <style>
+    #uppy-wrapper {
+      margin: auto;
+      width: 750px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container-fluid text-center px-5">
+    <h2 class="mt-2">WexFiles</h2>
+    <div class="row mt-2">
+      <div class="col">
+        <h4>Uploaded File List</h4>
+        <div id="fileList" class="text-start">
+          <i>Loading..</i>
+        </div>
+      </div>
+      <div class="col">
+        <h4>Upload new Files</h4>
+        <div id="uppy-wrapper">
+        <div id="uppy"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+<script src="bootstrap-5.2.3/js/bootstrap.min.js"></script>
+<script>
+
+
+function downloadUrl(url, filename)
+{
+  var link = document.createElement('a');
+  link.download = url;
+  link.href = filename;
+  link.click();
+}
+  </script>
+<script type="module">
+  import { Uppy, DragDrop, Dashboard, Tus } from "./uppy-3.6.1.min.mjs"
+
+
+let el_filelist = null;
+
+async function refreshFileList() {
+  const response = await fetch('/filelist');
+  const data = await response.json();
+
+
+  data.sort( ( a, b ) => {
+    if ( a.lmod < b.lmod ) return -1;
+    if ( a.lmod > b.lmod ) return 1;
+    return 0;
+  }
+  );
+  data.reverse();
+
+  if(data.length == 0)
+  {
+    el_filelist.innerHTML = '<i>No files have been uploaded.</i>';
+  }
+  else
+  {
+    let htmlList = '<table class="table">';
+    htmlList += '<thead><tr><th scope="col">Filename</th><th scope="col">Size</th><th scope="col">Uploaded</th></tr></thead>';
+    htmlList += '<tbody>';
+    data.forEach((item) => 
+    {
+      htmlList += `<tr><td><a download="${item.filename}" href="files/${item.id}">${item.filename}</a></td><td>${roundTo((item.size / (1024)),1)}KB</td><td>${item.lmod}</td></tr>`;
+    });
+    htmlList += '</tbody></table>';
+    el_filelist.innerHTML = htmlList;
+    //href="javascript:downloadUrl('files/${item.id}','${item.filename}');
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () =>
+{
+  el_filelist = document.getElementById('fileList');
+
+    //.use(DragDrop, { target: '#uppy', inline: true })
+  const uppy = new Uppy({ debug: true, autoProceed: true })
+    .use(Dashboard, {
+      target: "#uppy",
+      inline: true,
+      showProgressDetails: true,
+      showSelectedFiles: false,
+      doneButtonHandler: null
+    })
+  .use(Tus, { endpoint: "/files/"})
+  .on('complete', (result) =>
+    {
+      if(result.successful.length > 0)
+      {
+        refreshFileList();
+      }
+      if(result.failed.length > 0)
+      {
+        if(result.failed[0].error.includes('response text: Malware check Failed.'))
+        {
+          alert("One or more of the files that you attempted to upload may have contained malware. This file was blocked.");
+        }
+      }
+      console.log('Upload result:', result);
+    }
+  )
+
+  setInterval(() => {
+    refreshFileList();
+  }, 2000);
+
+  refreshFileList();
+});
+
+// ===========
+
+function roundTo(n, digits=0)
+{
+    let negative = false;
+    if (n < 0) {
+        negative = true;
+        n = n * -1;
+    }
+    let multiplicator = Math.pow(10, digits);
+    n = parseFloat((n * multiplicator).toFixed(11));
+    n = (Math.round(n) / multiplicator).toFixed(digits);
+    if (negative) {
+        n = (n * -1).toFixed(digits);
+    }
+    return n;
+}
+
+</script>
+
+</html>
